@@ -111,7 +111,7 @@ class JoyCon:
         return report[7:size+7]
 
     def _update_input_report(self):  # daemon thread
-        while True:
+        while hasattr(self, "_joycon_device"):
             report = self._read_input_report()
             # TODO, handle input reports of type 0x21 and 0x3f
             while report[0] != 0x30:
