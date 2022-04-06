@@ -40,7 +40,7 @@ class JoyCon:
         self.set_gyro_calibration((0, 0, 0), (1, 1, 1))
 
         # connect to joycon
-        self._joycon_device = self._open(vendor_id, product_id, serial=None)
+        self._joycon_device = self._open(vendor_id, product_id, serial=serial)
         self._read_joycon_data()
         self._setup_sensors()
 
