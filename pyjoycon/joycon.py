@@ -111,16 +111,20 @@ class JoyCon:
         return report[7:size+7]
 
     def _update_input_report(self):  # daemon thread
-        while hasattr(self, "_joycon_device"):
-            report = self._read_input_report()
-            # TODO, handle input reports of type 0x21 and 0x3f
-            while report[0] != 0x30:
+        try:
+            while hasattr(self, "_joycon_device"):
                 report = self._read_input_report()
+                # TODO, handle input reports of type 0x21 and 0x3f
+                while report[0] != 0x30:
+                    report = self._read_input_report()
 
-            self._input_report = report
+                self._input_report = report
 
-            for callback in self._input_hooks:
-                callback(self)
+                for callback in self._input_hooks:
+                    callback(self)
+        except OSError:
+            print('connection closed')
+            pass
 
     def _read_joycon_data(self):
         color_data = self._spi_flash_read(0x6050, 6)
