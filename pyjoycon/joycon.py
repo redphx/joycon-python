@@ -19,6 +19,7 @@ class JoyCon:
     simple_mode: bool
     color_body : (int, int, int)
     color_btn  : (int, int, int)
+    stick_cal  : [int, int, int, int, int, int, int, int]
 
     def __init__(self, vendor_id: int, product_id: int, serial: str = None, simple_mode=False):
         if vendor_id != JOYCON_VENDOR_ID:
@@ -129,9 +130,10 @@ class JoyCon:
     def _read_joycon_data(self):
         color_data = self._spi_flash_read(0x6050, 6)
 
-        # TODO: use this
-        # stick_cal_addr = 0x8012 if self.is_left else 0x801D
-        # stick_cal  = self._spi_flash_read(stick_cal_addr, 8)
+        self._read_stick_calibration_data()
+
+        buf = self._spi_flash_read(0x6086 if self.is_left() else 0x6098, 16)
+        self.deadzone = (buf[4] << 8) & 0xF00 | buf[3]
 
         # user IME data
         if self._spi_flash_read(0x8026, 2) == b"\xB2\xA1":
@@ -166,6 +168,35 @@ class JoyCon:
                 self._to_int16le_from_2bytes(imu_cal[22], imu_cal[23]),
             )
         )
+
+    def _read_stick_calibration_data(self):
+        user_stick_cal_addr = 0x8012 if self.is_left() else 0x801D
+        buf = self._spi_flash_read(user_stick_cal_addr, 9)
+        use_user_data = False
+
+        for b in buf:
+            if b != 0xFF:
+                use_user_data = True
+                break
+
+        if not use_user_data:
+            factory_stick_cal_addr = 0x603D if self.is_left() else 0x6046
+            buf = self._spi_flash_read(factory_stick_cal_addr, 9)
+
+        self.stick_cal = [0] * 6
+
+        # X Axis Max above center
+        self.stick_cal[0 if self.is_left() else 2] = (buf[1] << 8) & 0xF00 | buf[0]
+        # Y Axis Max above center
+        self.stick_cal[1 if self.is_left() else 3] = (buf[2] << 4) | (buf[1] >> 4)
+        # X Axis Center
+        self.stick_cal[2 if self.is_left() else 4] = (buf[4] << 8) & 0xF00 | buf[3]
+        # Y Axis Center
+        self.stick_cal[3 if self.is_left() else 5] = (buf[5] << 4) | (buf[4] >> 4)
+        # X Axis Min below center
+        self.stick_cal[4 if self.is_left() else 0] = (buf[7] << 8) & 0xF00 | buf[6]
+        # Y Axis Min below center
+        self.stick_cal[5 if self.is_left() else 1] = (buf[8] << 4) | (buf[7] >> 4)
 
     def _setup_sensors(self):
         # Enable 6 axis sensors
@@ -209,6 +240,15 @@ class JoyCon:
             self._ACCEL_COEFF_X = 0x4000 / cx if cx != 0x4000 else 1
             self._ACCEL_COEFF_Y = 0x4000 / cy if cy != 0x4000 else 1
             self._ACCEL_COEFF_Z = 0x4000 / cz if cz != 0x4000 else 1
+
+    def get_actual_stick_value(self, pre_cal, orientation):  # X/Horizontal = 0, Y/Vertical = 1
+        diff = pre_cal - self.stick_cal[2 + orientation]
+        if (abs(diff) < self.deadzone):
+            return 0
+        elif diff > 0:  # Axis is above center
+            return diff / self.stick_cal[orientation]
+        else:
+            return diff / self.stick_cal[4 + orientation]
 
     def register_update_hook(self, callback):
         self._input_hooks.append(callback)
@@ -296,20 +336,36 @@ class JoyCon:
         return self._get_nbit_from_input_report(5, 7, 1)
 
     def get_stick_left_horizontal(self):
-        return self._get_nbit_from_input_report(6, 0, 8) \
+        if not self.is_left():
+            return 0
+
+        pre_cal = self._get_nbit_from_input_report(6, 0, 8) \
             | (self._get_nbit_from_input_report(7, 0, 4) << 8)
+        return self.get_actual_stick_value(pre_cal, 0)
 
     def get_stick_left_vertical(self):
-        return self._get_nbit_from_input_report(7, 4, 4) \
+        if not self.is_left():
+            return 0
+
+        pre_cal = self._get_nbit_from_input_report(7, 4, 4) \
             | (self._get_nbit_from_input_report(8, 0, 8) << 4)
+        return self.get_actual_stick_value(pre_cal, 1)
 
     def get_stick_right_horizontal(self):
-        return self._get_nbit_from_input_report(9, 0, 8) \
+        if self.is_left():
+            return 0
+
+        pre_cal = self._get_nbit_from_input_report(9, 0, 8) \
             | (self._get_nbit_from_input_report(10, 0, 4) << 8)
+        return self.get_actual_stick_value(pre_cal, 0)
 
     def get_stick_right_vertical(self):
-        return self._get_nbit_from_input_report(10, 4, 4) \
+        if self.is_left():
+            return 0
+
+        pre_cal = self._get_nbit_from_input_report(10, 4, 4) \
             | (self._get_nbit_from_input_report(11, 0, 8) << 4)
+        return self.get_actual_stick_value(pre_cal, 1)
 
     def get_accel_x(self, sample_idx=0):
         if sample_idx not in (0, 1, 2):
