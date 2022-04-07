@@ -231,15 +231,16 @@ class JoyCon:
             self._GYRO_COEFF_Z = 0x343b / cz if cz != 0x343b else 1
 
     def set_accel_calibration(self, offset_xyz=None, coeff_xyz=None):
-        if offset_xyz:
+        if offset_xyz and coeff_xyz:
             self._ACCEL_OFFSET_X, \
             self._ACCEL_OFFSET_Y, \
             self._ACCEL_OFFSET_Z = offset_xyz
-        if coeff_xyz:
+
             cx, cy, cz = coeff_xyz
-            self._ACCEL_COEFF_X = 0x4000 / cx if cx != 0x4000 else 1
-            self._ACCEL_COEFF_Y = 0x4000 / cy if cy != 0x4000 else 1
-            self._ACCEL_COEFF_Z = 0x4000 / cz if cz != 0x4000 else 1
+            self._ACCEL_COEFF_X = (1.0 / (cx - self._ACCEL_OFFSET_X)) * 4.0
+            self._ACCEL_COEFF_Y = (1.0 / (cy - self._ACCEL_OFFSET_Y)) * 4.0
+            self._ACCEL_COEFF_Z = (1.0 / (cz - self._ACCEL_OFFSET_Z)) * 4.0
+
 
     def get_actual_stick_value(self, pre_cal, orientation):  # X/Horizontal = 0, Y/Vertical = 1
         diff = pre_cal - self.stick_cal[2 + orientation]
@@ -373,7 +374,7 @@ class JoyCon:
         data = self._to_int16le_from_2bytes(
             self._input_report[13 + sample_idx * 12],
             self._input_report[14 + sample_idx * 12])
-        return (data - self._ACCEL_OFFSET_X) * self._ACCEL_COEFF_X
+        return data * self._ACCEL_COEFF_X
 
     def get_accel_y(self, sample_idx=0):
         if sample_idx not in (0, 1, 2):
@@ -381,7 +382,7 @@ class JoyCon:
         data = self._to_int16le_from_2bytes(
             self._input_report[15 + sample_idx * 12],
             self._input_report[16 + sample_idx * 12])
-        return (data - self._ACCEL_OFFSET_Y) * self._ACCEL_COEFF_Y
+        return data * self._ACCEL_COEFF_Y * (1 if self.is_left() else -1)
 
     def get_accel_z(self, sample_idx=0):
         if sample_idx not in (0, 1, 2):
@@ -389,7 +390,7 @@ class JoyCon:
         data = self._to_int16le_from_2bytes(
             self._input_report[17 + sample_idx * 12],
             self._input_report[18 + sample_idx * 12])
-        return (data - self._ACCEL_OFFSET_Z) * self._ACCEL_COEFF_Z
+        return data * self._ACCEL_COEFF_Z * (1 if self.is_left() else -1)
 
     def get_gyro_x(self, sample_idx=0):
         if sample_idx not in (0, 1, 2):
