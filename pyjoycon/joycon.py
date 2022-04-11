@@ -65,14 +65,18 @@ class JoyCon:
         return _joycon_device
 
     def _close(self):
-        if hasattr(self, "_joycon_device"):
+        if self._joycon_device:
             self._joycon_device.close()
-            del self._joycon_device
+            self._joycon_device = None
 
     def _read_input_report(self) -> bytes:
-        return bytes(self._joycon_device.read(self._INPUT_REPORT_SIZE))
+        if self._joycon_device:
+            return bytes(self._joycon_device.read(self._INPUT_REPORT_SIZE))
 
     def _write_output_report(self, command, subcommand, argument):
+        if not self._joycon_device:
+            return
+
         # TODO: add documentation
         self._joycon_device.write(b''.join([
             command,
@@ -113,7 +117,7 @@ class JoyCon:
 
     def _update_input_report(self):  # daemon thread
         try:
-            while hasattr(self, "_joycon_device"):
+            while self._joycon_device:
                 report = self._read_input_report()
                 # TODO, handle input reports of type 0x21 and 0x3f
                 while report[0] != 0x30:
