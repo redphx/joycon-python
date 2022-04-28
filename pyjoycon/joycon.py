@@ -372,28 +372,46 @@ class JoyCon:
             | (self._get_nbit_from_input_report(11, 0, 8) << 4)
         return self.get_actual_stick_value(pre_cal, 1)
 
-    def get_accel_x(self, sample_idx=0):
+    def get_accels(self):
+        input_report = bytes(self._input_report)
+
+        x = self.get_accel_x(input_report)
+        y = self.get_accel_y(input_report)
+        z = self.get_accel_z(input_report)
+
+        return (x, y, z)
+
+    def get_accel_x(self, input_report=None, sample_idx=0):
+        if not input_report:
+            input_report = self._input_report
+
         if sample_idx not in (0, 1, 2):
             raise IndexError('sample_idx should be between 0 and 2')
         data = self._to_int16le_from_2bytes(
-            self._input_report[13 + sample_idx * 12],
-            self._input_report[14 + sample_idx * 12])
+            input_report[13 + sample_idx * 12],
+            input_report[14 + sample_idx * 12])
         return data * self._ACCEL_COEFF_X
 
-    def get_accel_y(self, sample_idx=0):
+    def get_accel_y(self, input_report=None, sample_idx=0):
+        if not input_report:
+            input_report = self._input_report
+
         if sample_idx not in (0, 1, 2):
             raise IndexError('sample_idx should be between 0 and 2')
         data = self._to_int16le_from_2bytes(
-            self._input_report[15 + sample_idx * 12],
-            self._input_report[16 + sample_idx * 12])
+            input_report[15 + sample_idx * 12],
+            input_report[16 + sample_idx * 12])
         return data * self._ACCEL_COEFF_Y * (1 if self.is_left() else -1)
 
-    def get_accel_z(self, sample_idx=0):
+    def get_accel_z(self, input_report=None, sample_idx=0):
+        if not input_report:
+            input_report = self._input_report
+
         if sample_idx not in (0, 1, 2):
             raise IndexError('sample_idx should be between 0 and 2')
         data = self._to_int16le_from_2bytes(
-            self._input_report[17 + sample_idx * 12],
-            self._input_report[18 + sample_idx * 12])
+            input_report[17 + sample_idx * 12],
+            input_report[18 + sample_idx * 12])
         return data * self._ACCEL_COEFF_Z * (1 if self.is_left() else -1)
 
     def get_gyro_x(self, sample_idx=0):
