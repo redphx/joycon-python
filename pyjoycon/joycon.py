@@ -20,6 +20,7 @@ class JoyCon:
     color_body : (int, int, int)
     color_btn  : (int, int, int)
     stick_cal  : [int, int, int, int, int, int, int, int]
+    connection_lost: bool
 
     def __init__(self, vendor_id: int, product_id: int, serial: str = None, simple_mode=False):
         if vendor_id != JOYCON_VENDOR_ID:
@@ -32,6 +33,7 @@ class JoyCon:
         self.product_id  = product_id
         self.serial      = serial
         self.simple_mode = simple_mode  # TODO: It's for reporting mode 0x3f
+        self.connection_lost = False
 
         # setup internal state
         self._input_hooks = []
@@ -129,7 +131,11 @@ class JoyCon:
                     callback(self)
         except OSError:
             print('connection closed')
-            pass
+            self.connection_lost = True
+        except hid.HIDException:
+            print('connection closed')
+            self.connection_lost = True
+
 
     def _read_joycon_data(self):
         color_data = self._spi_flash_read(0x6050, 6)
@@ -528,3 +534,4 @@ if __name__ == '__main__':
             joycon.set_player_lamp_on(lamp_pattern)
             lamp_pattern = (lamp_pattern + 1) & 0xf
             time.sleep(0.2)
+    
